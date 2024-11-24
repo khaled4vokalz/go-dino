@@ -16,7 +16,20 @@ type Obstacle struct {
 	x, y int
 }
 
-const DINO = "🦖"
+const (
+	minObstacleSpacing = 10 // Minimum spacing between obstacles
+	maxObstacles       = 5
+)
+
+// Generate a new obstacle at a random horizontal position
+func generateObstacle(screenWidth, groundLevel int, obstacles []Obstacle) []Obstacle {
+	newObstacle := Obstacle{
+		x: screenWidth - 1,
+		y: groundLevel,
+	}
+	obstacles = append(obstacles, newObstacle)
+	return obstacles
+}
 
 func gameOver() {
 	termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
@@ -36,18 +49,11 @@ func gameOver() {
 }
 
 func render(dino Dinosaur, obstacles []Obstacle) {
-	// Clear the screen before drawing
 	termbox.Clear(termbox.ColorDefault, termbox.ColorDefault)
-
-	// Draw dinosaur
 	termbox.SetCell(dino.x, dino.y, '🦖', termbox.ColorGreen, termbox.ColorDefault)
-
-	// Draw obstacles
 	for _, obs := range obstacles {
-		termbox.SetCell(obs.x, obs.y, 'O', termbox.ColorRed, termbox.ColorDefault)
+		termbox.SetCell(obs.x, obs.y, '🌵', termbox.ColorRed, termbox.ColorDefault)
 	}
-
-	// Refresh the screen
 	termbox.Flush()
 }
 
@@ -62,21 +68,26 @@ func checkCollision(dino Dinosaur, obstacles []Obstacle) bool {
 
 func updateObstacles(obstacles []Obstacle) {
 	for i := 0; i < len(obstacles); i++ {
-		obstacles[i].x -= 1 // Move each obstacle to the left
+		obstacles[i].x-- // Move obstacle left
 
-		// Remove obstacle if it's out of view (off the left side of the screen)
+		// Remove the obstacle if it moves off-screen
 		if obstacles[i].x < 0 {
-			obstacles = append(obstacles[:i], obstacles[i+1:]...) // Remove obstacle
+			obstacles = append(obstacles[:i], obstacles[i+1:]...)
 			i--
 		}
 	}
+}
 
-	// Randomly add a new obstacle with a certain chance
-	if rand.Intn(10) == 0 { // 1 in 10 chance to add an obstacle
-		width, _ := termbox.Size()
-		newObstacle := Obstacle{x: width, y: 10}
-		obstacles = append(obstacles, newObstacle)
+func maybeGenerateObstacle(screenWidth, groundLevel int, obstacles []Obstacle) []Obstacle {
+	if len(obstacles) >= maxObstacles {
+		return obstacles
 	}
+	if len(obstacles) == 0 || (obstacles[len(obstacles)-1].x < screenWidth-minObstacleSpacing) {
+		if rand.Float64() < 0.3 { // 30% chance to spawn per tick
+			obstacles = generateObstacle(screenWidth, groundLevel, obstacles)
+		}
+	}
+	return obstacles
 }
 
 func updateDinosaur(dino *Dinosaur) {
@@ -121,6 +132,9 @@ func main() {
 	for {
 		select {
 		case <-gameTick.C: // Game update and render every tick
+
+			screenWidth, _ := termbox.Size() // Get terminal dimensions
+			groundLevel := 10
 			updateDinosaur(&dino)
 			updateObstacles(obstacles)
 
@@ -128,7 +142,7 @@ func main() {
 				gameOver()
 				return
 			}
-
+			obstacles = maybeGenerateObstacle(screenWidth, groundLevel, obstacles)
 			render(dino, obstacles)
 
 		case ev := <-eventChannel: // Handle keyboard events
